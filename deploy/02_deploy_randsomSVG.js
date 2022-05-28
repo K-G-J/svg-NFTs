@@ -1,4 +1,4 @@
-const {
+let {
   networkConfig,
   getNetworkIdFromName,
 } = require('../helper-hardhat-config')
@@ -8,14 +8,15 @@ module.exports = async ({ getNamedAccounts, deployments, getChainId }) => {
   const { deploy, get, log } = deployments
   const { deployer } = await getNamedAccounts()
   const chainId = await getChainId()
-
-  let linkTokenAddress, vrfCoordinatorAddress
+  let linkTokenAddress
+  let vrfCoordinatorAddress
 
   if (chainId == 31337) {
     let linkToken = await get('LinkToken')
+    let VRFCoordinatorMock = await get('VRFCoordinatorMock')
     linkTokenAddress = linkToken.address
-    let vrfCoordinatorMock = await get('VRFCoordinatorMock')
-    vrfCoordinatorAddress = vrfCoordinatorMock.address
+    vrfCoordinatorAddress = VRFCoordinatorMock.address
+    additionalMessage = ' --linkaddress ' + linkTokenAddress
   } else {
     linkTokenAddress = networkConfig[chainId]['linkToken']
     vrfCoordinatorAddress = networkConfig[chainId]['vrfCoordinator']
@@ -29,10 +30,10 @@ module.exports = async ({ getNamedAccounts, deployments, getChainId }) => {
     args: args,
     log: true,
   })
-  log('You have deployed your NFT contract!')
+  log(`You have deployed an NFT contract to ${RandomSVG.address}`)
   const networkName = networkConfig[chainId]['name']
   log(
-    `Verify with: \n yarn hardhat verify --network ${networkName} ${
+    `Verify with:\n npx hardhat verify --network ${networkName} ${
       RandomSVG.address
     } ${args.toString().replace(/,/g, ' ')}`,
   )
@@ -44,6 +45,7 @@ module.exports = async ({ getNamedAccounts, deployments, getChainId }) => {
     RandomSVGContract.interface,
     signer,
   )
+
   // fund with LINK
   let networkId = await getNetworkIdFromName(networkName)
   const fundAmount = networkConfig[networkId]['fundAmount']
@@ -55,10 +57,12 @@ module.exports = async ({ getNamedAccounts, deployments, getChainId }) => {
   )
   let fund_tx = await linkToken.transfer(RandomSVG.address, fundAmount)
   await fund_tx.wait(1)
-  // create and NFT by calling a random number
+  // await new Promise(r => setTimeout(r, 5000))
+  log("Let's create an NFT now!")
   let tokenId
   if (chainId != 31337) {
     // First we setup up a listener, and then we call the create tx
+    // This is so we can be sure to not miss it!
     const timeout = new Promise((res) => setTimeout(res, 300000))
     const listenForEvent = new Promise(async (resolve, reject) => {
       randomSVG.once('CreatedUnfinishedRandomSVG', async () => {
@@ -95,6 +99,7 @@ module.exports = async ({ getNamedAccounts, deployments, getChainId }) => {
     tx = await randomSVG.finishMint(tokenId, { gasLimit: 2000000 })
     await tx.wait(1)
   }
-  log(`You can view the tokenURI here ${await randomSVG.tokenURI(tokenId)}`)
+  log(`You can view the tokenURI here ${await randomSVG.tokenURI(0)}`)
 }
+
 module.exports.tags = ['all', 'rsvg']
